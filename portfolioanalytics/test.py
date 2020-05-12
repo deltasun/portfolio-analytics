@@ -2,15 +2,7 @@ import pandas as pd
 import numpy as np
 import pandas_datareader as web
 from datetime import date, timedelta
-
-import importlib.util
-spec = importlib.util.spec_from_file_location(
-    name="portfolio-analytics",
-    location="/Users/d/code/d/portfolio-analytics/portfolio-analytics/portfolio_return.py"
-)
-foo = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(foo)
-Portfolio = foo.Portfolio
+from portfolioanalytics.portfolio_return import Portfolio
 
 # download google stock historical data
 start_date = date(2019, 12, 31)
