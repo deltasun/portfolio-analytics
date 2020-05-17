@@ -63,15 +63,18 @@ class Portfolio(object):
 
         return components_value
 
-    def portfolio_returns(self, method="simple", weights=None, V0=100, verbose=False):
+    def portfolio_returns(self, method="simple", weights=None, V0=100, leverage=1, verbose=False):
         """
 
-            :param method:
-            :param weights: if None, assume a buy-hold equally weighted ptf. otherwise pd.DataFrame, with .index rebalancing dates
-            :param V0: float, initial portfolio value
-            :param verbose: if True, returns components contributions to portfolio returns
-            :return: portfolio returns. if contribution=True, return tuple with ptf rets, contribs
-            """
+        :param method:
+        :param weights: if None, assume a buy-hold equally weighted ptf. otherwise pd.DataFrame, with .index rebalancing dates
+        :param V0: float, initial portfolio value
+        :param leverage: float, the maximum investment. if sum(w) > leverage, then rebase to leverage.
+                            if sum(w) < leverage, then create residual weight with zero returns.
+                            if None, do not adjust weights.
+        :param verbose: if True, returns components contributions to portfolio returns
+        :return: portfolio returns. if verbose=True, return tuple with ptf rets, contribs
+        """
 
         returns = self.compute_returns(method)
 
@@ -79,10 +82,19 @@ class Portfolio(object):
             N = returns.shape[1]
             weights = pd.DataFrame([np.repeat(1 / N, N)], index=[returns.index[0]], columns=returns.columns)
 
-        if not all(np.isclose(weights.sum(axis=1), 1, rtol=1e-09)):
-            warnings.warn("one or more rebalancing dates have weights not summing up to 1:\nadd a residual weight to compensate")
-            weights["residual"] = 1 - weights.sum(axis=1)
-            returns["residual"] = 0
+        if leverage is not None:
+            if any(weights.sum(axis=1) > leverage):
+                warnings.warn("sum of weights exceed leverage value of {} in dates {}:\nrebasing to {}".format(
+                    leverage, weights[weights.sum(axis=1) > leverage].index.values, leverage))
+                weights[weights.sum(axis=1) > leverage] = weights[weights.sum(axis=1) > leverage].apply(
+                    lambda x: x / sum(x) * leverage, axis=1
+                )
+
+            if not all(np.isclose(weights.sum(axis=1), leverage, rtol=1e-09)):
+                warnings.warn(
+                    "one or more rebalancing dates have weights not summing up to 1:\nadd a residual weight to compensate")
+                weights["residual"] = leverage - weights.sum(axis=1)
+                returns["residual"] = 0
 
 
         # subset returns to match weights.columns
@@ -157,7 +169,7 @@ class Portfolio(object):
         # remove first return which is NaN
         ptf_ret.dropna(inplace=True)
 
-        if verbose == True:
+        if verbose:
             # compute components' contributions in each day via
             # contrib_i = V_i - Vbop_i / sum(Vbop)
             contrib = V.add(-V_bop).divide(V_bop.sum(axis=1), axis=0)
